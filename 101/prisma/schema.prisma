@@ -1,0 +1,119 @@
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Person model - represents users who can be assigned tasks
+model Person {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      String?  // Optional: e.g., "developer", "manager", "designer"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  tasksAssigned Task[]    @relation("AssignedTasks")
+  tasksCreated  Task[]    @relation("CreatedTasks")
+  comments      Comment[] // Added missing relation
+  
+  @@index([email])
+  @@index([name])
+}
+
+// Task model - represents individual tasks with status tracking and hierarchical relationships
+model Task {
+  id          String    @id @default(cuid())
+  title       String
+  description String?   @db.Text
+  status      Status    @default(TODO)
+  priority    Priority  @default(MEDIUM)
+  
+  // Time tracking
+  startTime   DateTime?
+  endTime     DateTime?
+  dueDate     DateTime?
+  
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  // Relations - Person
+  assigneeId  String?
+  assignee    Person?   @relation("AssignedTasks", fields: [assigneeId], references: [id], onDelete: SetNull)
+  
+  creatorId   String
+  creator     Person    @relation("CreatedTasks", fields: [creatorId], references: [id])
+  
+  // Self-referential relations for parent-child hierarchy
+  parentId    String?
+  parent      Task?     @relation("TaskHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Task[]    @relation("TaskHierarchy")
+  
+  // Many-to-many relation for task dependencies (properly configured)
+  dependsOn   Task[]    @relation("DependsOn")
+  dependedBy  Task[]    @relation("DependsOn")
+  
+  // Additional metadata
+  tags        Tag[]
+  comments    Comment[]
+  
+  @@index([status])
+  @@index([assigneeId])
+  @@index([creatorId])
+  @@index([parentId])
+  @@index([startTime])
+  @@index([dueDate])
+}
+
+// Comment model - for task discussions
+model Comment {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
+  authorId  String
+  author    Person   @relation(fields: [authorId], references: [id])
+  
+  @@index([taskId])
+  @@index([authorId])
+}
+
+// Tag model - for categorizing tasks
+model Tag {
+  id    String @id @default(cuid())
+  name  String @unique
+  color String @default("#808080")
+  
+  tasks Task[]
+  
+  @@index([name])
+}
+
+// Enum for task status
+enum Status {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  BLOCKED
+  COMPLETED
+  CANCELLED
+}
+
+// Enum for task priority
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}

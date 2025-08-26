@@ -1,0 +1,45 @@
+version: "3.9"
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: appsecret
+      POSTGRES_DB: appdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  server:
+    image: node:20-bookworm
+    working_dir: /app/server
+    command: bash -lc "npm ci && npx prisma generate && npx prisma migrate dev --name init && npm run dev"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/demoprisma?schema=public
+      - PORT=4000
+      - CORS_ORIGIN=http://localhost:5173
+      - NODE_ENV=development
+    volumes:
+      - ./server:/app/server
+    ports:
+      - "4000:4000"
+    depends_on:
+      - db
+
+  client:
+    image: node:20-bookworm
+    working_dir: /app/client
+    command: bash -lc "npm ci && npm run dev -- --host"
+    environment:
+      - VITE_API_URL=http://localhost:4000
+    volumes:
+      - ./client:/app/client
+    ports:
+      - "5173:5173"
+    depends_on:
+      - server
+
+volumes:
+  pgdata:
